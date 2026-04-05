@@ -1,19 +1,25 @@
-"""Environment implementation package."""
+"""
+OpenEnv-facing models (root module for schema discovery and imports).
 
-from env.env import CorporateExpenseEnvironment
+Implementation lives in ``env.models``; this module re-exports the public surface.
+"""
+
 from env.models import (
     CorporateExpenseAction,
     CorporateExpenseObservation,
     CorporateExpenseState,
     ExpenseRecord,
     ExpenseStepReward,
+    StepRewardBreakdown,
+    TrajectoryStep,
 )
 
 __all__ = [
     "CorporateExpenseAction",
-    "CorporateExpenseEnvironment",
     "CorporateExpenseObservation",
     "CorporateExpenseState",
     "ExpenseRecord",
     "ExpenseStepReward",
+    "StepRewardBreakdown",
+    "TrajectoryStep",
 ]

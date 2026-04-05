@@ -1,80 +1,43 @@
 """
-Inference Script Example
-===================================
-MANDATORY
-- Before submitting, ensure the following variables are defined in your environment configuration:
-    API_BASE_URL   The API endpoint for the LLM.
-    MODEL_NAME     The model identifier to use for inference.
-    HF_TOKEN       Your Hugging Face / API key.
-    LOCAL_IMAGE_NAME The name of the local image to use for the environment if you are using from_docker_image()
-                     method
+Inference script for the corporate expense approval OpenEnv environment.
 
-- Defaults are set only for API_BASE_URL and MODEL_NAME 
-    (and should reflect your active inference setup):
-    API_BASE_URL = os.getenv("API_BASE_URL", "<your-active-endpoint>")
-    MODEL_NAME = os.getenv("MODEL_NAME", "<your-active-model>")
-    
-- The inference script must be named `inference.py` and placed in the root directory of the project
-- Participants must use OpenAI Client for all LLM calls using above variables
+Environment variables (see README):
+    API_BASE_URL   LLM API base URL (OpenAI-compatible).
+    MODEL_NAME     Model id for chat completions.
+    HF_TOKEN       API key (falls back to API_KEY).
+    IMAGE_NAME     Docker image for CorporateExpenseEnv.from_docker_image().
+    CORPORATE_EXPENSE_TASK   Task id: easy | medium | hard (optional).
 
-STDOUT FORMAT
-- The script must emit exactly three line types to stdout, in this order:
-
-    [START] task=<task_name> env=<benchmark> model=<model_name>
-    [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
-    [END]   success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
-
-  Rules:
-    - One [START] line at episode begin.
-    - One [STEP] line per step, immediately after env.step() returns.
-    - One [END] line after env.close(), always emitted (even on exception).
-    - reward and rewards are formatted to 2 decimal places.
-    - done and success are lowercase booleans: true or false.
-    - error is the raw last_action_error string, or null if none.
-    - All fields on a single line with no newlines within a line.
-    - Each tasks should return score in [0, 1]
-
-  Example:
-    [START] task=click-test env=miniwob model=Qwen3-VL-30B
-    [STEP] step=1 action=click('123') reward=0.00 done=false error=null
-    [STEP] step=2 action=fill('456','text') reward=0.00 done=false error=null
-    [STEP] step=3 action=click('789') reward=1.00 done=true error=null
-    [END] success=true steps=3 score=1.00 rewards=0.00,0.00,1.00
+STDOUT FORMAT (do not change):
+    [START] task=<task> env=<env> model=<model>
+    [STEP] step=<n> action=<action> reward=<0.00> done=<true|false> error=<msg|null>
+    [END] success=<true|false> steps=<n> score=<0.00> rewards=<r1,r2,...>
 """
 
+from __future__ import annotations
+
 import asyncio
+import json
 import os
+import re
 import textwrap
-from typing import List, Optional
+from typing import Any, List, Optional, Tuple
 
 from openai import OpenAI
 
-from my_env_v4 import MyEnvV4Action, MyEnvV4Env
-IMAGE_NAME = os.getenv("IMAGE_NAME") # If you are using docker image 
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
+from client import CorporateExpenseEnv
+from models import CorporateExpenseAction
 
+IMAGE_NAME = os.getenv("IMAGE_NAME")
+API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
-TASK_NAME = os.getenv("MY_ENV_V4_TASK", "echo")
-BENCHMARK = os.getenv("MY_ENV_V4_BENCHMARK", "my_env_v4")
-MAX_STEPS = 8
-TEMPERATURE = 0.7
-MAX_TOKENS = 150
-SUCCESS_SCORE_THRESHOLD = 0.1  # normalized score in [0, 1]
-
-# Max possible reward: each token contributes 0.1, across all steps
-_MAX_REWARD_PER_STEP = MAX_TOKENS * 0.1
-MAX_TOTAL_REWARD = MAX_STEPS * _MAX_REWARD_PER_STEP
-
-SYSTEM_PROMPT = textwrap.dedent(
-    """
-    You are interacting with a simple echo environment.
-    Each turn you must send a message. The environment will echo it back.
-    Reward is proportional to message length: reward = len(message) * 0.1
-    Your goal is to maximize total reward by sending meaningful, substantive messages.
-    Reply with exactly one message string — no quotes, no prefixes, just the message text.
-    """
-).strip()
+TASK_NAME = os.getenv("CORPORATE_EXPENSE_TASK", os.getenv("EXPENSE_TASK", "easy"))
+BENCHMARK = os.getenv("CORPORATE_EXPENSE_BENCHMARK", "corporate_expense_approval")
+MAX_STEPS = 64
+TEMPERATURE = 0.3
+MAX_TOKENS = 400
+SUCCESS_SCORE_THRESHOLD = 0.55
 
 
 def log_start(task: str, env: str, model: str) -> None:
@@ -92,49 +55,112 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
+    print(
+        f"[END] success={str(success).lower()} steps={steps} score={score:.2f} rewards={rewards_str}",
+        flush=True,
+    )
 
 
-def build_user_prompt(step: int, last_echoed: str, last_reward: float, history: List[str]) -> str:
-    history_block = "\n".join(history[-4:]) if history else "None"
-    return textwrap.dedent(
-        f"""
-        Step: {step}
-        Last echoed message: {last_echoed!r}
-        Last reward: {last_reward:.2f}
-        Previous steps:
-        {history_block}
-        Send your next message.
-        """
-    ).strip()
+SYSTEM_PROMPT = textwrap.dedent(
+    """
+    You are a corporate expense approver. For each claim you must output ONE JSON object only,
+    with keys:
+      "decision": "approve" or "reject"
+      "reason": a concise justification citing receipts, duplicates, policy limits, or fraud cues.
+
+    Rules of thumb:
+    - Approve only clearly compliant small claims with documentation.
+    - Reject missing receipts when amounts are material, duplicate line items, or suspicious high spend.
+    - Mention specific cues (duplicate, receipt, policy, suspicious amount) when they apply.
+
+    Output JSON only. No markdown fences.
+    """
+).strip()
 
 
-def get_model_message(client: OpenAI, step: int, last_echoed: str, last_reward: float, history: List[str]) -> str:
-    user_prompt = build_user_prompt(step, last_echoed, last_reward, history)
+def _format_observation_for_prompt(obs: Any) -> str:
+    idx = obs.current_expense_index
+    lines = [
+        f"Task: {obs.task}",
+        f"Current expense index: {idx} (0-based)",
+        f"Total in batch: {len(obs.pending_expenses)}",
+    ]
+    if idx < len(obs.pending_expenses):
+        cur = obs.pending_expenses[idx]
+        lines.append("Current expense:")
+        lines.append(
+            json.dumps(
+                {
+                    "id": cur.id,
+                    "amount": cur.amount,
+                    "category": cur.category,
+                    "receipt_provided": cur.receipt_provided,
+                    "description": cur.description,
+                    "timestamp": cur.timestamp,
+                },
+                indent=2,
+            )
+        )
+    lines.append("Earlier rows in this batch (for duplicate detection):")
+    for i, e in enumerate(obs.pending_expenses):
+        if i >= idx:
+            break
+        lines.append(
+            f"  - [{e.id}] ${e.amount:.2f} | {e.category} | receipt={e.receipt_provided} | {e.description!r}"
+        )
+    return "\n".join(lines)
+
+
+def _parse_decision_json(text: str) -> Tuple[str, str]:
+    text = text.strip()
+    m = re.search(r"\{[\s\S]*\}", text)
+    if m:
+        text = m.group(0)
+    data = json.loads(text)
+    decision = str(data.get("decision", "")).strip().lower()
+    reason = str(data.get("reason", "")).strip()
+    if decision not in ("approve", "reject"):
+        raise ValueError(f"invalid decision: {decision!r}")
+    return decision, reason
+
+
+def get_model_action(client: OpenAI, user_block: str) -> CorporateExpenseAction:
     try:
         completion = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
+                {"role": "user", "content": user_block},
             ],
             temperature=TEMPERATURE,
             max_tokens=MAX_TOKENS,
             stream=False,
         )
-        text = (completion.choices[0].message.content or "").strip()
-        return text if text else "hello"
+        raw = (completion.choices[0].message.content or "").strip()
+        decision, reason = _parse_decision_json(raw)
+        return CorporateExpenseAction(decision=decision, reason=reason)
     except Exception as exc:
-        print(f"[DEBUG] Model request failed: {exc}", flush=True)
-        return "hello"
+        print(f"[DEBUG] Model parse failed, using safe reject: {exc}", flush=True)
+        return CorporateExpenseAction(
+            decision="reject",
+            reason="Fallback: could not produce a valid JSON decision; rejecting for safety.",
+        )
+
+
+def action_log_string(action: CorporateExpenseAction) -> str:
+    inner = json.dumps(
+        {"decision": action.decision, "reason": action.reason}, ensure_ascii=False
+    )
+    return f"expense_action({inner})"
 
 
 async def main() -> None:
+    if not IMAGE_NAME:
+        raise RuntimeError("IMAGE_NAME must be set for from_docker_image()")
+
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    env = await CorporateExpenseEnv.from_docker_image(IMAGE_NAME)
 
-    env = await MyEnvV4Env.from_docker_image(IMAGE_NAME)
-
-    history: List[str] = []
     rewards: List[float] = []
     steps_taken = 0
     score = 0.0
@@ -142,40 +168,50 @@ async def main() -> None:
 
     log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
 
+    last_obs: Any = None
     try:
-        result = await env.reset() # OpenENV.reset()
-        last_echoed = result.observation.echoed_message
-        last_reward = 0.0
+        result = await env.reset(task=TASK_NAME)
+        last_err: Optional[str] = None
 
         for step in range(1, MAX_STEPS + 1):
             if result.done:
+                last_obs = result.observation
                 break
 
-            message = get_model_message(client, step, last_echoed, last_reward, history)
-
-            result = await env.step(MyEnvV4Action(message=message))
             obs = result.observation
+            user_block = _format_observation_for_prompt(obs)
+            action = get_model_action(client, user_block)
+            action_str = action_log_string(action)
 
-            reward = result.reward or 0.0
-            done = result.done
-            error = None
+            result = await env.step(action)
+            obs = result.observation
+            last_obs = obs
+            reward = float(result.reward or 0.0)
+            done = bool(result.done)
+            last_err = obs.last_action_error
 
             rewards.append(reward)
             steps_taken = step
-            last_echoed = obs.echoed_message
-            last_reward = reward
 
-            log_step(step=step, action=message, reward=reward, done=done, error=error)
-
-            history.append(f"Step {step}: {message!r} -> reward {reward:+.2f}")
+            log_step(step=step, action=action_str, reward=reward, done=done, error=last_err)
 
             if done:
                 break
 
-        score = sum(rewards) / MAX_TOTAL_REWARD if MAX_TOTAL_REWARD > 0 else 0.0
-        score = min(max(score, 0.0), 1.0)  # clamp to [0, 1]
+        if last_obs is not None and last_obs.episode_score is not None:
+            score = float(last_obs.episode_score)
+        elif rewards:
+            score = sum(rewards) / len(rewards)
+        else:
+            score = 0.0
+        score = max(0.0, min(1.0, score))
         success = score >= SUCCESS_SCORE_THRESHOLD
 
+    except Exception as exc:
+        print(f"[DEBUG] Episode error: {exc}", flush=True)
+        success = False
+        if not rewards:
+            score = 0.0
     finally:
         try:
             await env.close()
