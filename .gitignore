@@ -1,0 +1,141 @@
+# ──────────────────────────────────────────────
+#  Python
+# ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+wheels/
+*.whl
+MANIFEST
+
+# ──────────────────────────────────────────────
+#  Virtual Environments
+# ──────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.env/
+
+# ──────────────────────────────────────────────
+#  uv
+# ──────────────────────────────────────────────
+# Keep uv.lock committed so builds are reproducible;
+# ignore the uv cache if it lands in the repo.
+.uv/
+
+# ──────────────────────────────────────────────
+#  Environment / Secrets
+# ──────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.secret
+secrets/
+
+# ──────────────────────────────────────────────
+#  Testing & Coverage
+# ──────────────────────────────────────────────
+.pytest_cache/
+.cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+nosetests.xml
+test-results/
+
+# ──────────────────────────────────────────────
+#  Linting / Type-checking
+# ──────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pytype/
+
+# ──────────────────────────────────────────────
+#  PyTorch / ML artefacts
+# ──────────────────────────────────────────────
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.bin
+runs/
+outputs/
+experiments/
+wandb/
+mlruns/
+lightning_logs/
+
+# ──────────────────────────────────────────────
+#  Jupyter Notebooks checkpoints
+# ──────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ──────────────────────────────────────────────
+#  Docker
+# ──────────────────────────────────────────────
+docker-compose.override.yml
+
+# ──────────────────────────────────────────────
+#  Data & Logs
+# ──────────────────────────────────────────────
+data/
+datasets/
+*.csv
+*.tsv
+*.log
+logs/
+
+# ──────────────────────────────────────────────
+#  OS artefacts
+# ──────────────────────────────────────────────
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+
+# ──────────────────────────────────────────────
+#  IDEs & Editors
+# ──────────────────────────────────────────────
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.sublime-project
+*.sublime-workspace
+
+# ──────────────────────────────────────────────
+#  Misc
+# ──────────────────────────────────────────────
+*.pid
+*.seed
+*.pid.lock
+tmp/
+temp/
