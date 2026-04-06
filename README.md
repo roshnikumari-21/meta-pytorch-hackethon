@@ -112,7 +112,7 @@ The server implements the full **OpenEnv HTTP protocol** (FastAPI + uvicorn), so
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/<your-username>/meta-pytorch-hackathon.git
+git clone https://github.com/ayushkumarsingh2422005/meta-pytorch-hackethon.git
 cd meta-pytorch-hackathon
 
 # Install with dev dependencies (pytest, etc.)
@@ -420,7 +420,7 @@ This project is designed to run as a **Hugging Face Space** (Docker SDK). Follow
 
 ```bash
 # Add remote with token baked into the URL
-git remote add hf https://<your-username>:<hf_token>@huggingface.co/spaces/<your-username>/corporate-expense-openenv
+git remote add hf https://ayushmaurayadev:<hf_token>@huggingface.co/spaces/ayushmaurayadev/corporate-expense-openenv
 
 # Push main branch (HF Spaces auto-deploys from main)
 git push hf main
@@ -429,7 +429,7 @@ git push hf main
 If you already added the remote without a token, update it first:
 
 ```bash
-git remote set-url hf https://<your-username>:<hf_token>@huggingface.co/spaces/<your-username>/corporate-expense-openenv
+git remote set-url hf https://ayushmaurayadev:<hf_token>@huggingface.co/spaces/ayushmaurayadev/corporate-expense-openenv
 git push hf main
 ```
 
@@ -440,7 +440,7 @@ pip install huggingface_hub
 huggingface-cli login   # prompts for your token; stores it in ~/.cache/huggingface
 
 # Now plain HTTPS push works, no token in URL
-git remote add hf https://huggingface.co/spaces/<your-username>/corporate-expense-openenv
+git remote add hf https://huggingface.co/spaces/ayushmaurayadev/corporate-expense-openenv
 git push hf main
 ```
 
@@ -465,7 +465,7 @@ If your server needs secrets (e.g. `CORPORATE_EXPENSE_TASK`):
 
 ```bash
 # Replace with your actual Space URL
-curl -s -X POST https://<your-username>-corporate-expense-openenv.hf.space/reset \
+curl -s -X POST https://ayushmaurayadev-corporate-expense-openenv.hf.space/reset \
   -H "Content-Type: application/json" \
   -d '{}' | python -m json.tool
 ```
@@ -527,7 +527,7 @@ Use the included shell script to run all 3 pre-submission checks:
 chmod +x scripts/validate-submission.sh
 
 ./scripts/validate-submission.sh \
-  https://<your-username>-corporate-expense-openenv.hf.space \
+  https://ayushmaurayadev-corporate-expense-openenv.hf.space \
   .
 ```
 
